@@ -1,7 +1,13 @@
 # Rendered by `envsubst` at container start (the official nginx image
 # auto-applies templates in /etc/nginx/templates/*.template). Only the
-# variables listed in NGINX_ENVSUBST_FILTER are substituted — nginx's
-# own $host / $proxy_add_x_forwarded_for stay intact.
+# variables in NGINX_ENVSUBST_FILTER are substituted — nginx's own
+# $host / $proxy_add_x_forwarded_for etc. stay intact.
+
+# In-cluster DNS resolver (kube-dns), set at boot by the wrapper
+# entrypoint. Pairing this with `set $backend …; proxy_pass $backend;`
+# pushes DNS resolution to *request* time, so nginx doesn't crash at
+# startup just because the api KSvc isn't reachable yet.
+resolver ${NGINX_RESOLVER} valid=30s ipv6=off;
 
 server {
   listen 80;
@@ -10,31 +16,28 @@ server {
   root /usr/share/nginx/html;
   index index.html;
 
-  # Pass /api/* through to the backend. Keep BACKEND_URL with no
-  # trailing slash so the path is forwarded verbatim.
+  # /api/* → backend. The trailing slash on `location` is paired with a
+  # variable proxy_pass so nginx forwards $request_uri verbatim.
   location /api/ {
-    proxy_pass        ${BACKEND_URL};
+    set $backend "${BACKEND_URL}";
+    proxy_pass        $backend;
     proxy_http_version 1.1;
     proxy_set_header   Host $host;
     proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header   X-Forwarded-Proto $scheme;
-    # Forward the platform gate's identity header straight through —
-    # the backend trusts it because the gate stamps it after it has
-    # validated the visitor's cookie at the edge.
+    # Forward the platform gate's identity header straight through.
     proxy_pass_request_headers on;
     proxy_read_timeout 30s;
   }
 
-  # Static assets get a long browser cache. CF in front of us caches
-  # them globally too.
+  # Static assets get a long browser cache; CF caches them globally too.
   location /_next/static/ {
     expires    30d;
     add_header Cache-Control "public, immutable";
   }
 
-  # SPA-style fallback: any unknown path serves the closest matching
-  # exported HTML, defaulting to /index.html so the Next.js router
-  # can pick the right page on the client.
+  # SPA fallback: any unknown path serves the closest matching exported
+  # HTML, defaulting to /index.html so client-side routing can pick up.
   location / {
     try_files $uri $uri.html $uri/index.html /index.html;
   }

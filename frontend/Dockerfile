@@ -13,9 +13,13 @@ COPY . .
 RUN pnpm build
 
 FROM nginx:1.27-alpine AS runner
-# Limit envsubst to BACKEND_URL so $host / $proxy_add_x_forwarded_for
-# in the nginx config aren't expanded against env vars.
-ENV NGINX_ENVSUBST_FILTER="BACKEND_URL"
+# Substitute these two variables and nothing else (so nginx's own
+# $host / $proxy_add_x_forwarded_for / $scheme stay literal).
+ENV NGINX_ENVSUBST_FILTER="BACKEND_URL|NGINX_RESOLVER"
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=builder /app/out /usr/share/nginx/html
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 EXPOSE 80
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["nginx", "-g", "daemon off;"]
