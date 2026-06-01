@@ -16,6 +16,16 @@ server {
   root /usr/share/nginx/html;
   index index.html;
 
+  # The CF → Kourier → activator → queue-proxy → gate → nginx chain
+  # accumulates headers (X-Forwarded-*, Cookie, X-Coders-User, etc.).
+  # nginx's defaults (1 × 8k) reject the request as 400 "Request
+  # Header Or Cookie Too Large" pretty easily; widen the budget.
+  client_header_buffer_size 16k;
+  large_client_header_buffers 8 32k;
+  proxy_buffer_size          32k;
+  proxy_buffers              8 32k;
+  proxy_busy_buffers_size    64k;
+
   # /api/* → backend. The trailing slash on `location` is paired with a
   # variable proxy_pass so nginx forwards $request_uri verbatim.
   location /api/ {
