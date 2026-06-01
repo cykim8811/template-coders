@@ -9,22 +9,26 @@
 # startup just because the api KSvc isn't reachable yet.
 resolver ${NGINX_RESOLVER} valid=30s ipv6=off;
 
+# These have to live at http-context (not inside `server`), because
+# nginx parses the request line + initial headers before it knows which
+# server block to use. Files in /etc/nginx/conf.d/ are already included
+# inside the main http {} block, so writing them at file-top is fine.
+#
+# The CF → Kourier → activator → queue-proxy → gate → nginx chain
+# accumulates X-Forwarded-*, Cookie, X-Coders-User; nginx's defaults
+# (1 × 8k) reject those with 400 "Request Header Or Cookie Too Large".
+client_header_buffer_size 16k;
+large_client_header_buffers 8 32k;
+proxy_buffer_size          32k;
+proxy_buffers              8 32k;
+proxy_busy_buffers_size    64k;
+
 server {
   listen 80;
   server_name _;
 
   root /usr/share/nginx/html;
   index index.html;
-
-  # The CF → Kourier → activator → queue-proxy → gate → nginx chain
-  # accumulates headers (X-Forwarded-*, Cookie, X-Coders-User, etc.).
-  # nginx's defaults (1 × 8k) reject the request as 400 "Request
-  # Header Or Cookie Too Large" pretty easily; widen the budget.
-  client_header_buffer_size 16k;
-  large_client_header_buffers 8 32k;
-  proxy_buffer_size          32k;
-  proxy_buffers              8 32k;
-  proxy_busy_buffers_size    64k;
 
   # /api/* → backend. The trailing slash on `location` is paired with a
   # variable proxy_pass so nginx forwards $request_uri verbatim.
