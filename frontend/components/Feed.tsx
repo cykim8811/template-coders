@@ -9,6 +9,8 @@ import { SignInLink } from "./SignIn";
 export function Feed() {
   const me = useMe();
   const [feed, setFeed] = useState<Post[] | null>(null);
+  const [posting, setPosting] = useState(false);
+  const [postError, setPostError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchFeed().then(setFeed);
@@ -19,12 +21,18 @@ export function Feed() {
     const form = e.currentTarget;
     const body = (form.elements.namedItem("body") as HTMLTextAreaElement).value
       .trim();
-    if (!body) return;
-    const created = await createPost(body);
-    if (created) {
+    if (!body || posting) return;
+    setPostError(null);
+    setPosting(true);
+    try {
+      const created = await createPost(body);
       form.reset();
       // Optimistic: prepend the new post so the user sees their write.
       setFeed((existing) => (existing ? [created, ...existing] : [created]));
+    } catch (err) {
+      setPostError((err as Error).message);
+    } finally {
+      setPosting(false);
     }
   }
 
@@ -62,19 +70,38 @@ export function Feed() {
             rows={3}
             style={{ width: "100%", boxSizing: "border-box" }}
           />
-          <div style={{ marginTop: ".5rem", textAlign: "right" }}>
+          <div
+            style={{
+              marginTop: ".5rem",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: ".75rem",
+            }}
+          >
+            <span
+              style={{
+                color: "#dc2626",
+                fontSize: ".88em",
+                minHeight: "1.2em",
+                flex: 1,
+              }}
+            >
+              {postError ?? ""}
+            </span>
             <button
               type="submit"
+              disabled={posting}
               style={{
                 padding: ".4em 1em",
-                background: "#0f172a",
+                background: posting ? "#475569" : "#0f172a",
                 color: "white",
                 border: 0,
                 borderRadius: 6,
-                cursor: "pointer",
+                cursor: posting ? "wait" : "pointer",
               }}
             >
-              Post
+              {posting ? "Posting…" : "Post"}
             </button>
           </div>
         </form>
