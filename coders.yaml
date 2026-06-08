@@ -7,6 +7,11 @@
 #
 # Existing apps that already have their own login can deploy with
 # `mode: standalone` instead — see PLATFORM.md in the coders-platform repo.
+#
+# This file is validated against a STRICT schema: only the documented
+# fields are allowed and any unknown key fails the deploy (see PLATFORM.md
+# §9 for the full field list). Don't add fields the platform doesn't
+# define — they won't be ignored, they'll be rejected.
 
 version: "1"
 mode: native

@@ -273,6 +273,59 @@ are billed at 1/10th). The proxy clamps `max_tokens` to 16,000 per request.
 
 ---
 
+## 9. `coders.yaml` is a strict contract — exact fields only
+
+The platform validates your `coders.yaml` against a fixed schema and
+**rejects any key it doesn't recognise**. A typo or a field from some
+other tool's config (`build:`, `public:`, `scale:`, `resources:`,
+`needs:`, `release:`, `health:`, `version:` on a service, …) **fails the
+deploy** with the offending field named — it is not silently ignored. If
+a deploy errors with `Extra inputs are not permitted`, delete that key.
+
+The complete accepted shape (everything else is an error):
+
+```yaml
+version: "1"            # optional, default "1"
+mode: native            # optional: native | standalone (default native)
+
+services:               # required, ≥1 entry; each is a build OR a component
+  <name>:               # ---- buildable service ----
+    dockerfile: path/to/Dockerfile   # required (relative to repo root)
+    context: .                       # optional, default "."
+    port: 8080                       # optional, default 8080
+    expose: internal                 # optional: public | internal (default internal)
+    timeout: 300                     # optional seconds, 1–3600 (default 300)
+    env:                             # optional, ${...}-substituted
+      KEY: value
+
+  <name>:                            # ---- managed component (no build) ----
+    type: postgres                   # exposes ${<name>.host/port/user/password/name/url}
+    size: 1Gi                        #   optional, 512Mi–10Gi (advisory)
+  <name>:
+    type: redis                      # exposes ${<name>.host/port/url}
+  <name>:
+    type: object                     # exposes ${<name>.bucket/region/endpoint/public_url}
+    quota_gb: 1                      #   optional, 1–50
+  <name>:
+    type: llm                        # exposes ${<name>.url/token} — see §8
+    models: [claude-sonnet-4-6, claude-haiku-4-5]   # optional allow-list
+    default_model: claude-sonnet-4-6                # optional, must be in models
+```
+
+Cross-field rules the validator also enforces:
+
+- **Exactly one** buildable service may set `expose: public` (that's your
+  site at `<project>.coders.kr`).
+- **At most one** `object` component and **at most one** `llm` component.
+
+The canonical machine-readable schema lives at
+[`schema/coders.schema.json`](https://github.com/cykim8811/coders-platform/blob/main/schema/coders.schema.json)
+in the platform repo (point your editor's YAML LSP at it for inline
+validation), and a worked example is at
+[`examples/coders.yaml`](https://github.com/cykim8811/coders-platform/blob/main/examples/coders.yaml).
+
+---
+
 ## TL;DR
 
 - Trust `X-Coders-User`; never build login; link to `mcp.coders.kr/sso/*`.
@@ -288,6 +341,8 @@ are billed at 1/10th). The proxy clamps `max_tokens` to 16,000 per request.
   every Claude call or it bills the anonymous pool. Tokens are the priciest
   axis — a $3 pool ≈ 140 Sonnet turns.
 - Build at image time so cold starts stay fast.
+- **`coders.yaml` is strict** — only the documented fields (§9) are
+  allowed; an unknown key fails the deploy. Don't invent fields.
 - **Hit friction deploying? File it** at the public tracker:
   `gh issue create --repo cykim8811/coders-feedback ...` (any error you worked
   around, confusing message, doc that didn't match reality — whether it's your
