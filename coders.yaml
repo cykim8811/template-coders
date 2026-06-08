@@ -32,6 +32,12 @@ services:
 
   api:
     dockerfile: backend/Dockerfile
+    # `context` is the Docker build context — a Dockerfile can only COPY
+    # files INSIDE it. `backend` is enough here. If a service needs a shared
+    # monorepo package that lives outside its own dir (e.g. backend AND a
+    # daemon both import `packages/protocol`), set `context: .` (repo root)
+    # and have the Dockerfile COPY both `packages/protocol` and `backend/`.
+    # A COPY of a path outside the context is the usual opaque build failure.
     context: backend
     port: 8000
     env:
