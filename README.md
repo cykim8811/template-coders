@@ -1,5 +1,7 @@
 # template-coders
 
+[![Deploy on coders.kr](https://coders.kr/deploy-button.svg)](https://coders.kr/deploy?repo=https://github.com/cykim8811/template-coders)
+
 A small starter app written for the [coders.kr](https://coders.kr)
 platform. Hand a Claude Code session the link to this repo, ask it to
 deploy, and you have a live site that:

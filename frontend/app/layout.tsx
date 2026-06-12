@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Inter, JetBrains_Mono } from "next/font/google";
 
+import { DevDeployBadge } from "@/components/DevDeployBadge";
 import { Header } from "@/components/Header";
 import { WarmingBar } from "@/components/WarmingBanner";
 
@@ -32,6 +33,7 @@ export default function RootLayout({
     <html lang="en" className={`${inter.variable} ${mono.variable}`}>
       <body>
         <WarmingBar />
+        <DevDeployBadge />
         <div className="mx-auto max-w-3xl px-6 sm:px-8 pb-16">
           <Header />
           <main>{children}</main>
