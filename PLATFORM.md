@@ -368,6 +368,46 @@ The value is injected into **every service's** container env as
 `${secrets.STRIPE_SECRET}`. A `coders.yaml` `env:` entry with the same key
 wins over it.
 
+### Object storage — reads via the proxy, writes via S3/HMAC
+
+A `type: object` component gives you a private per-tenant GCS bucket. It
+exposes these substitutions:
+
+| Reference                  | Use                                                    |
+|----------------------------|--------------------------------------------------------|
+| `${<name>.bucket}`         | bucket name                                            |
+| `${<name>.region}`         | bucket region                                          |
+| `${<name>.public_url}`     | **read** prefix — `https://<proj>.coders.kr/__storage`; serve files by building `f"{public_url}/{key}"` |
+| `${<name>.s3_endpoint}`    | S3-compatible endpoint (`https://storage.googleapis.com`) |
+| `${<name>.access_key}` / `${<name>.secret_key}` | S3/HMAC credentials for authenticated **writes** |
+
+**Reads go through `${...public_url}`** (the gate's `/__storage/*` proxy —
+cached + metered). **Writes** use the S3 API with the HMAC pair, so an
+existing boto3 / aws-sdk app works with no rewrite:
+
+```python
+import boto3
+from botocore.config import Config
+
+s3 = boto3.client(
+    "s3",
+    endpoint_url=os.environ["STORAGE_S3_ENDPOINT"],         # ${bucket.s3_endpoint}
+    aws_access_key_id=os.environ["STORAGE_ACCESS_KEY"],     # ${bucket.access_key}
+    aws_secret_access_key=os.environ["STORAGE_SECRET_KEY"], # ${bucket.secret_key}
+    region_name="auto",
+    # boto3 >= 1.36 adds request checksums GCS's S3 API rejects
+    # (SignatureDoesNotMatch). Turn them off for GCS interop:
+    config=Config(request_checksum_calculation="when_required",
+                  response_checksum_validation="when_required"),
+)
+s3.put_object(Bucket=os.environ["STORAGE_BUCKET"], Key="u/123/avatar.png", Body=data)
+```
+
+The HMAC credentials are **write+overwrite only — they cannot read or
+list** (that's deliberate: it keeps every download on the metered proxy).
+So `GetObject`/`ListObjects` over S3 will 403 — read through `public_url`
+instead. Presigned-URL downloads won't work; serve reads via the proxy.
+
 ---
 
 ## 10. Push-to-deploy (optional)
