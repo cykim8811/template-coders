@@ -328,6 +328,46 @@ in the platform repo (point your editor's YAML LSP at it for inline
 validation), and a worked example is at
 [`examples/coders.yaml`](https://github.com/cykim8811/coders-platform/blob/main/examples/coders.yaml).
 
+### `PORT` is injected and overrides your image
+
+The platform injects `PORT=<the service's `port`>` into the container at
+runtime, and it **overrides any `ENV PORT` baked into your image**. For a
+normal single-process service that's exactly what you want — listen on
+`$PORT` (or just the `port` you declared) and you're done.
+
+It bites a **multi-process** container — one running an in-pod reverse proxy
+or sidecar (e.g. nginx fronting a Next.js server, because only one service
+may be `expose: public` and Next.js can't proxy WebSockets). If your app
+server reads `PORT`, the injected value (= the public `port`, e.g. `80`)
+makes it try to bind the port the proxy already owns → it dies with
+`EADDRINUSE` and every request 502s even though `status()` says `ready`.
+
+Pattern: let the proxy own the declared `port`, and **pin your app to a
+different internal port in the entrypoint** — don't rely on `ENV PORT`, the
+injection beats it:
+
+```sh
+# entrypoint.sh — nginx owns :80 (the declared port), app on :3000
+PORT=3000 node server.js &      # force the app OFF the injected PORT
+exec nginx -g 'daemon off;'     # nginx :80 routes /ws → app, rest → app
+```
+
+### Secrets & config values — use `set_env`, not a `secrets:` key
+
+There is **no `secrets:` field** in `coders.yaml` (the schema above rejects
+it). To give the app a value you don't want in the repo — an API key, a
+client secret — set it out of band and redeploy:
+
+```
+set_env('<name>', 'STRIPE_SECRET', 'sk_live_…', secret=True)
+deploy(...)        # roll a new revision that picks it up
+```
+
+The value is injected into **every service's** container env as
+`STRIPE_SECRET`, and is also referenceable from `coders.yaml` as
+`${secrets.STRIPE_SECRET}`. A `coders.yaml` `env:` entry with the same key
+wins over it.
+
 ---
 
 ## 10. Push-to-deploy (optional)
